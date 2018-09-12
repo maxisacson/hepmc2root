@@ -295,13 +295,13 @@ int main(int argc, char** argv) {
             std::cout << "ievent " << ievent << '\n';
         }
 
-        clear(output.event);
         if (evt.is_valid()) {
+            clear(output.event);
             evt_code = process_evt(evt, output.event);
+            output.tree->Fill();
+            ++ievent;
         }
-        output.tree->Fill();
 
-        ++ievent;
 
         // if (ievent >= 100) {
         //     break;
