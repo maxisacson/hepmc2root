@@ -15,7 +15,6 @@ list(APPEND CMAKE_PREFIX_PATH ${ROOT_PATH})
 find_package(ROOT)
 
 include(${ROOT_USE_FILE})
-# ROOT_GENERATE_DICTIONARY(Dict LINKDEF LinkDef.h)
 REFLEX_GENERATE_DICTIONARY(G__Classes classes.h SELECTION classes.xml)
 add_library(G__ClassesDict SHARED G__Classes.cxx)
 target_link_libraries(G__ClassesDict ${ROOT_LIBRARIES})
