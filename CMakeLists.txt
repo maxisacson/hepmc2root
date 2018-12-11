@@ -4,6 +4,8 @@ project(hepmc2root)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wshadow")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wshadow")
 
 set(HEPMC_PATH "/usr/local" CACHE PATH "Path to HepMC2 installation")
 set(ROOT_CONFIG "root-config" CACHE FILEPATH "Path to root-config")

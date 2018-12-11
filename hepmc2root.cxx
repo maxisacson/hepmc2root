@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include <unistd.h>
+
 #include "HepMC/GenEvent.h"
 #include "HepMC/GenRanges.h"
 
@@ -11,7 +13,16 @@
 #include "TFile.h"
 
 void usage(char** argv) {
-    std::printf("Usage: %s <input> [output]\n", argv[0]);
+    std::printf("Usage: %s <input> [output] [options]\n", argv[0]);
+    std::cout << "Options:\n";
+    std::cout << "  -h      Display this message and exit.\n";
+    std::cout << "  -n <N>  Process only the first N events.\n";
+}
+
+template<typename T, typename F>
+auto find_idx(const T& v, F&& pred) {
+    const auto& pos = std::find_if(std::begin(v), std::end(v), pred);
+    return std::distance(std::begin(v), pos);
 }
 
 struct Event {
@@ -43,6 +54,9 @@ struct Event {
     std::vector<int> prod_vtx_barcode{};
     std::vector<int> decay_vtx_barcode{};
 
+    std::vector<std::vector<int>> children{};
+    std::vector<std::vector<int>> parents{};
+
     std::vector<double> pt{};
     std::vector<double> e{};
     std::vector<double> m{};
@@ -58,6 +72,9 @@ struct Event {
 
     std::vector<std::vector<int>> vtx_part_in_barcode{};
     std::vector<std::vector<int>> vtx_part_out_barcode{};
+
+    std::vector<std::vector<int>> vtx_part_in{};
+    std::vector<std::vector<int>> vtx_part_out{};
 };
 
 struct Output {
@@ -65,6 +82,32 @@ struct Output {
     std::unique_ptr<TTree> tree{};
     Event event{};
 };
+
+auto fill_particle(const HepMC::GenParticle& p, Event& event) {
+    event.pdg_id.push_back(p.pdg_id());
+    event.barcode.push_back(p.barcode());
+    event.status.push_back(p.status());
+    event.is_final_state.push_back((int)(p.status() == 1));
+
+    const auto& momentum = p.momentum();
+    event.pt.push_back(momentum.perp());
+    event.e.push_back(momentum.e());
+    event.m.push_back(momentum.m());
+    event.eta.push_back(momentum.eta());
+    event.phi.push_back(momentum.phi());
+
+    return event.pdg_id.size() - 1;
+}
+
+void fill_vertex(int i, const HepMC::GenVertex& v, Event& event) {
+    event.vtx_barcode[i] = v.barcode();
+
+    const auto& position = v.position();
+    event.vtx_x[i]       = position.x();
+    event.vtx_y[i]       = position.y();
+    event.vtx_z[i]       = position.z();
+    event.vtx_t[i]       = position.t();
+}
 
 void clear(Event& event) {
     event.number      = 0;
@@ -94,6 +137,9 @@ void clear(Event& event) {
     event.prod_vtx_barcode.clear();
     event.decay_vtx_barcode.clear();
 
+    event.children.clear();
+    event.parents.clear();
+
     event.pt.clear();
     event.e.clear();
     event.m.clear();
@@ -107,12 +153,15 @@ void clear(Event& event) {
     event.vtx_z.clear();
     event.vtx_t.clear();
 
+    event.vtx_part_in.clear();
+    event.vtx_part_out.clear();
     event.vtx_part_in_barcode.clear();
     event.vtx_part_out_barcode.clear();
 }
 
 void make_output(const std::string& fn_output, Output& output) {
-    output.file = std::unique_ptr<TFile>(TFile::Open(fn_output.c_str(), "RECREATE"));
+    output.file =
+            std::unique_ptr<TFile>(TFile::Open(fn_output.c_str(), "RECREATE"));
     output.file->cd();
     output.tree = std::make_unique<TTree>("nominal", "nominal");
 
@@ -142,6 +191,8 @@ void make_output(const std::string& fn_output, Output& output) {
     output.tree->Branch("decay_vtx",         &output.event.decay_vtx);
     output.tree->Branch("prod_vtx_barcode",  &output.event.prod_vtx_barcode);
     output.tree->Branch("decay_vtx_barcode", &output.event.decay_vtx_barcode);
+    output.tree->Branch("children",          &output.event.children);
+    output.tree->Branch("parents",           &output.event.parents);
 
     output.tree->Branch("pt",  &output.event.pt);
     output.tree->Branch("e",   &output.event.e);
@@ -155,15 +206,15 @@ void make_output(const std::string& fn_output, Output& output) {
     output.tree->Branch("vtx_z",       &output.event.vtx_z);
     output.tree->Branch("vtx_t",       &output.event.vtx_t);
 
-    output.tree->Branch("vtx_part_in_barcode",  &output.event.vtx_part_in_barcode);
-    output.tree->Branch("vtx_part_out_barcode", &output.event.vtx_part_out_barcode);
+    output.tree->Branch(
+            "vtx_part_in_barcode",      &output.event.vtx_part_in_barcode);
+    output.tree->Branch(
+            "vtx_part_out_barcode",     &output.event.vtx_part_out_barcode);
+    output.tree->Branch("vtx_part_in",  &output.event.vtx_part_in);
+    output.tree->Branch("vtx_part_out", &output.event.vtx_part_out);
 }
 
 int process_evt(const HepMC::GenEvent& evt, Event& event) {
-    const auto find_idx = [](const auto& v, const auto& pred) {
-        const auto& pos = std::find_if(std::begin(v), std::end(v), pred);
-        return std::distance(std::begin(v), pos);
-    };
 
     event.number      = evt.event_number();
     event.n_particles = evt.particles_size();
@@ -186,81 +237,97 @@ int process_evt(const HepMC::GenEvent& evt, Event& event) {
         event.pdf2     = pdf_info->pdf2();
     }
 
-
     const auto& weights = evt.weights();
     for (const auto& w : weights) {
         event.weights.push_back(w);
     }
 
     const auto& particles = evt.particle_range();
-    const auto& vertices = evt.vertex_range();
+    const auto& vertices  = evt.vertex_range();
+
+    auto n_particles =
+            std::distance(std::begin(particles), std::end(particles));
+    auto n_vertices = std::distance(std::begin(vertices), std::end(vertices));
+
+    assert(n_particles >= 0);
+    assert(n_vertices >= 0);
+
+    event.children.resize(n_particles);
+    event.parents.resize(n_particles);
+    event.prod_vtx.resize(n_particles);
+    event.decay_vtx.resize(n_particles);
+    event.prod_vtx_barcode.resize(n_particles);
+    event.decay_vtx_barcode.resize(n_particles);
+
+    event.vtx_barcode.resize(n_vertices);
+    event.vtx_x.resize(n_vertices);
+    event.vtx_y.resize(n_vertices);
+    event.vtx_z.resize(n_vertices);
+    event.vtx_t.resize(n_vertices);
+    event.vtx_part_in_barcode.resize(n_vertices);
+    event.vtx_part_out_barcode.resize(n_vertices);
+    event.vtx_part_in.resize(n_vertices);
+    event.vtx_part_out.resize(n_vertices);
 
     for (const auto& p : particles) {
-        event.pdg_id.push_back(p->pdg_id());
-        event.barcode.push_back(p->barcode());
-        event.status.push_back(p->status());
-
-        event.is_final_state.push_back((int)(p->status() == 1));
+        auto ip = fill_particle(*p, event);
+        assert(ip >= 0);
+        assert(ip < n_particles);
 
         const auto& prod_vtx = p->production_vertex();
         if (prod_vtx != nullptr) {
-            event.prod_vtx_barcode.push_back(prod_vtx->barcode());
+            event.prod_vtx_barcode[ip] = prod_vtx->barcode();
+
+            auto iv = find_idx(vertices, [&prod_vtx](const auto& v) {
+                return prod_vtx->barcode() == v->barcode();
+            });
+            assert(iv >= 0);
+            assert(iv < n_vertices);
+
+            fill_vertex(iv, *prod_vtx, event);
+
+            event.prod_vtx[ip] = iv;
+            event.vtx_part_out_barcode[iv].push_back(p->barcode());
+            event.vtx_part_out[iv].push_back(ip);
         } else {
-            event.prod_vtx_barcode.push_back(0);
+            event.prod_vtx[ip] = -1;
         }
 
         const auto& end_vtx = p->end_vertex();
         if (end_vtx != nullptr) {
-            event.decay_vtx_barcode.push_back(end_vtx->barcode());
+            event.decay_vtx_barcode[ip] = end_vtx->barcode();
+
+            auto iv = find_idx(vertices, [&end_vtx](const auto& v) {
+                return end_vtx->barcode() == v->barcode();
+            });
+            assert(iv >= 0);
+            assert(iv < n_vertices);
+
+            fill_vertex(iv, *end_vtx, event);
+
+            event.decay_vtx[ip] = iv;
+            event.vtx_part_in_barcode[iv].push_back(p->barcode());
+            event.vtx_part_in[iv].push_back(ip);
         } else {
-            event.decay_vtx_barcode.push_back(0);
+            event.decay_vtx[ip] = -1;
         }
-
-#if 0
-        auto prod_vtx = p->production_vertex();
-        if (prod_vtx != nullptr) {
-            output.event.prod_vtx.push_back(find_idx(
-                    vertices, [bc = prod_vtx->barcode()](const auto& vtx) { return bc == vtx->barcode(); }));
-        }
-
-        auto decay_vtx = p->end_vertex();
-        if (decay_vtx != nullptr) {
-            output.event.decay_vtx.push_back(find_idx(
-                    vertices, [bc = decay_vtx->barcode()](const auto& vtx) { return bc == vtx->barcode(); }));
-        }
-#endif
-
-        const auto& momentum = p->momentum();
-        event.pt.push_back(momentum.perp());
-        event.e.push_back(momentum.e());
-        event.m.push_back(momentum.m());
-        event.eta.push_back(momentum.eta());
-        event.phi.push_back(momentum.phi());
     }
 
-    for (const auto& v : vertices) {
-        event.vtx_barcode.push_back(v->barcode());
+    for (size_t ip = 0; ip < n_particles; ++ip) {
+        const auto iv_prod  = event.prod_vtx[ip];
+        const auto iv_decay = event.decay_vtx[ip];
 
-        const auto& position = v->position();
-        event.vtx_x.push_back(position.x());
-        event.vtx_y.push_back(position.y());
-        event.vtx_z.push_back(position.z());
-        event.vtx_t.push_back(position.t());
-
-
-        std::vector<int> part_in_barcode{};
-        auto p_in = v->particles_in_const_begin();
-        for(; p_in != v->particles_in_const_end(); ++p_in) {
-            part_in_barcode.push_back((*p_in)->barcode());
+        if (iv_decay > -1) {
+            for (const auto& child : event.vtx_part_out[iv_decay]) {
+                event.children[ip].push_back(child);
+            }
         }
-        event.vtx_part_in_barcode.push_back(part_in_barcode);
 
-        std::vector<int> part_out_barcode{};
-        auto p_out = v->particles_out_const_begin();
-        for(; p_out != v->particles_out_const_end(); ++p_out) {
-            part_out_barcode.push_back((*p_out)->barcode());
+        if (iv_prod > -1) {
+            for (const auto& parent : event.vtx_part_in[iv_prod]) {
+                event.parents[ip].push_back(parent);
+            }
         }
-        event.vtx_part_out_barcode.push_back(part_out_barcode);
     }
 
     return 0;
@@ -272,14 +339,32 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::string fn_input = argv[1];
+    int c;
+    int maxevents = -1;
+    while ((c = getopt(argc, argv, "hn:")) != -1) {
+        switch (c) {
+        case 'h': {
+            usage(argv);
+            return 0;
+        } break;
+        case 'n': {
+            maxevents = atoi(optarg);
+        } break;
+        default:
+            return 2;
+            break;
+        }
+    }
+
+    std::string fn_input  = argv[optind];
     std::string fn_output = "out.root";
-    if (argc >= 3) {
-        fn_output = argv[2];
+    if (argc >= optind+2) {
+        fn_output = argv[optind+1];
     }
 
     std::cout << "In: " << fn_input << '\n';
     std::cout << "Out: " << fn_output << '\n';
+    std::cout << "Processing " << maxevents << " events.\n";
 
     Output output{};
     make_output(fn_output, output);
@@ -287,9 +372,18 @@ int main(int argc, char** argv) {
     std::ifstream is(fn_input);
     HepMC::GenEvent evt;
     int evt_code = 0;
-    int ievent = 0;
+    int ievent   = 0;
     while (is) {
+
+        if (maxevents >= 0 && ievent >= maxevents) {
+            break;
+        }
+
         evt.read(is);
+
+        if (ievent == 0) {
+            evt.write_units();
+        }
 
         if (ievent % 500 == 0) {
             std::cout << "ievent " << ievent << '\n';
@@ -301,11 +395,6 @@ int main(int argc, char** argv) {
             output.tree->Fill();
             ++ievent;
         }
-
-
-        // if (ievent >= 100) {
-        //     break;
-        // }
     }
     std::cout << ievent << " events processed." << '\n';
     output.file->Write();
