@@ -23,3 +23,6 @@ include_directories(${PROJECT_SOURCE_DIR}/include ${HEPMC_PATH}/include ${ROOT_I
 
 add_executable(hepmc2root hepmc2root.cxx G__Classes.cxx)
 target_link_libraries(hepmc2root ${HEPMC_PATH}/lib/libHepMC.so ${ROOT_LIBRARIES})
+
+add_executable(split_hepmc2 split_hepmc2.cxx)
+target_link_libraries(split_hepmc2 ${HEPMC_PATH}/lib/libHepMC.so)
