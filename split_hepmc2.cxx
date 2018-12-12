@@ -5,10 +5,21 @@
 #include <unistd.h>
 
 #include "HepMC/GenEvent.h"
-// #include "HepMC/GenRanges.h"
 #include "HepMC/IO_GenEvent.h"
 
+void usage(char** argv) {
+    std::printf("Usage: %s <input> [base_output] [options]\n", argv[0]);
+    std::cout << "Options:\n";
+    std::cout << "  -h      Display this message and exit.\n";
+    std::cout << "  -n <N>  Process only the first N events.\n";
+    std::cout << "  -e <E>  Split input into E events per file.\n";
+}
+
 int main(int argc, char** argv) {
+    if (argc < 2) {
+        usage(argv);
+        return 1;
+    }
 
     int c;
     int events_per_file = -1;
@@ -31,7 +42,10 @@ int main(int argc, char** argv) {
     }
 
     std::string fn_input = argv[optind];
-    std::string fn_output_base = "out_events_test.hepmc";
+    std::string fn_output_base = "out.hepmc";
+    if (argc >= optind+2) {
+        fn_output_base = argv[optind+1];
+    }
     std::stringstream fn_output;
 
     std::ifstream is(fn_input);
@@ -67,7 +81,7 @@ int main(int argc, char** argv) {
             ++file_ievent;
         }
     }
-    std::cout << ievent << " events processed." << '\n';
+    std::cout << ievent << " events split over " << (ifile+1) << " files." << '\n';
 
     delete ascii_io;
 
