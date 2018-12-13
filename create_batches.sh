@@ -3,8 +3,9 @@
 create_pbs_job() {
     local g4mac=$1
     local output=$2
-    local jobfile=${g4mac##g4_/pbs_}
-    jobfile=${jobfile%.mac/.sh}
+    local jobfile=${g4mac##g4_}
+    jobfile=${jobfile%.mac}
+    jobfile="pbs_${jobfile}.sh"
 
 cat > "$jobfile" <<EOF
 #!/bin/bash
@@ -12,7 +13,7 @@ cat > "$jobfile" <<EOF
 #PBS -N ${g4mac%.mac}
 #PBS -l nodes=1:ppn=1
 
-cd $PBS_O_WORKDIR
+cd \$PBS_O_WORKDIR
 ./GenericDetector $g4mac $output
 EOF
 }
@@ -27,6 +28,8 @@ while IFS= read -r -d '' x; do
     base=${x##*/}
     g4mac="g4_${base}.mac"
 
+    echo "Creating job for $x"
+
 cat > "$g4mac" <<EOF
 /control/verbose 2
 /run/verbose 2
@@ -37,5 +40,4 @@ cat > "$g4mac" <<EOF
 EOF
 
     create_pbs_job "$g4mac" "${base}.root"
-
 done < <(find $(pwd) -type f -regex "^.*${base_output}\.[0-9]+$" -print0 | sort -z)
