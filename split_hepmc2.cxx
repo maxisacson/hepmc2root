@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     }
 
     std::string fn_input = argv[optind];
-    std::string fn_output_base = "out.hepmc";
+    std::string fn_output_base = fn_input;
     if (argc >= optind+2) {
         fn_output_base = argv[optind+1];
     }
@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     fn_output << fn_output_base << "." << ifile;
     auto* ascii_io = new HepMC::IO_GenEvent(fn_output.str(), std::ios::out);
 
+    std::cout << "Splitting input " << fn_input << " ...\n";
     while (is) {
         if (maxevents >= 0 && ievent >= maxevents) {
             break;
