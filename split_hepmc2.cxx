@@ -8,7 +8,7 @@
 #include "HepMC/IO_GenEvent.h"
 
 void usage(char** argv) {
-    std::cout << "Split a single hepmc2-file into several.\n\n;
+    std::cout << "Split a single hepmc2-file into several.\n\n";
     std::printf("Usage: %s <input> [base_output] [options]\n", argv[0]);
     std::cout << "Options:\n";
     std::cout << "  -h      Display this message and exit.\n";
