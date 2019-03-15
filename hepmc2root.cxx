@@ -13,6 +13,7 @@
 #include "TFile.h"
 
 void usage(char** argv) {
+    std::cout << "Convert a hepmc2-file to a root tree.\n\n";
     std::printf("Usage: %s <input> [output] [options]\n", argv[0]);
     std::cout << "Options:\n";
     std::cout << "  -h      Display this message and exit.\n";
@@ -277,8 +278,7 @@ int process_evt(const HepMC::GenEvent& evt, Event& event, bool flat) {
 
     for (const auto& p : particles) {
         auto ip = fill_particle(*p, event);
-        assert(ip >= 0);
-        assert(ip < n_particles);
+        assert(ip < (unsigned)n_particles);
 
         const auto& prod_vtx = p->production_vertex();
         if (prod_vtx != nullptr && !flat) {
@@ -320,7 +320,7 @@ int process_evt(const HepMC::GenEvent& evt, Event& event, bool flat) {
     }
 
     if (!flat) {
-        for (size_t ip = 0; ip < n_particles; ++ip) {
+        for (size_t ip = 0; ip < (unsigned)n_particles; ++ip) {
             const auto iv_prod  = event.prod_vtx[ip];
             const auto iv_decay = event.decay_vtx[ip];
 
@@ -352,19 +352,25 @@ int main(int argc, char** argv) {
     bool flat = false;
     while ((c = getopt(argc, argv, "hn:f")) != -1) {
         switch (c) {
-        case 'h': {
-            usage(argv);
-            return 0;
-        } break;
-        case 'n': {
-            maxevents = atoi(optarg);
-        } break;
-        case 'f': {
-            flat = true;
-        } break;
-        default:
-            return 2;
-            break;
+            case 'h':
+                {
+                    usage(argv);
+                    return 0;
+                }
+                break;
+            case 'n':
+                {
+                    maxevents = atoi(optarg);
+                }
+                break;
+            case 'f':
+                {
+                    flat = true;
+                }
+                break;
+            default:
+                return 2;
+                break;
         }
     }
 
@@ -383,7 +389,6 @@ int main(int argc, char** argv) {
 
     std::ifstream is(fn_input);
     HepMC::GenEvent evt;
-    int evt_code = 0;
     int ievent   = 0;
     while (is) {
 
@@ -403,7 +408,7 @@ int main(int argc, char** argv) {
 
         if (evt.is_valid()) {
             clear(output.event);
-            evt_code = process_evt(evt, output.event, flat);
+            process_evt(evt, output.event, flat);
             output.tree->Fill();
             ++ievent;
         }

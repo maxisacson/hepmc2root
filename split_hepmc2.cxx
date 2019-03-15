@@ -8,6 +8,7 @@
 #include "HepMC/IO_GenEvent.h"
 
 void usage(char** argv) {
+    std::cout << "Split a single hepmc2-file into several.\n\n;
     std::printf("Usage: %s <input> [base_output] [options]\n", argv[0]);
     std::cout << "Options:\n";
     std::cout << "  -h      Display this message and exit.\n";
@@ -26,18 +27,23 @@ int main(int argc, char** argv) {
     int maxevents = -1;
     while ((c = getopt(argc, argv, "hn:e:")) != -1) {
         switch (c) {
-        case 'h':
-            return 0;
-            break;
-        case 'n': {
-            maxevents = atoi(optarg);
-        } break;
-        case 'e': {
-            events_per_file = atoi(optarg);
-        } break;
-        default:
-            return 2;
-            break;
+            case 'h':
+                usage(argv);
+                return 0;
+                break;
+            case 'n':
+                {
+                    maxevents = atoi(optarg);
+                }
+                break;
+            case 'e':
+                {
+                    events_per_file = atoi(optarg);
+                }
+                break;
+            default:
+                return 2;
+                break;
         }
     }
 
@@ -50,7 +56,6 @@ int main(int argc, char** argv) {
 
     std::ifstream is(fn_input);
     HepMC::GenEvent evt;
-    int evt_code = 0;
     int ievent   = 0;
     int file_ievent   = 0;
     int ifile    = 0;
@@ -76,7 +81,6 @@ int main(int argc, char** argv) {
         evt.read(is);
 
         if (evt.is_valid()) {
-            auto tmp = &evt;
             ascii_io->write_event(&evt);
             ++ievent;
             ++file_ievent;
