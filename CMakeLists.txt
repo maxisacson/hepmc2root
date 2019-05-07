@@ -4,8 +4,8 @@ project(hepmc2root)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wall -Wextra -Wshadow")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -Wall -Wextra -Wshadow")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Wshadow")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -g -Wall -Wextra -Wshadow")
 
 set(HEPMC_PATH "/usr/local" CACHE PATH "Path to HepMC2 installation")
 set(ROOT_CONFIG "root-config" CACHE FILEPATH "Path to root-config")
@@ -29,3 +29,6 @@ target_link_libraries(split_hepmc2 ${HEPMC_PATH}/lib/libHepMC.so)
 
 add_executable(merge_hepmc2 merge_hepmc2.cxx)
 target_link_libraries(merge_hepmc2 ${HEPMC_PATH}/lib/libHepMC.so)
+
+add_executable(prune_hepmc2 prune_hepmc2.cxx)
+target_link_libraries(prune_hepmc2 ${HEPMC_PATH}/lib/libHepMC.so)
