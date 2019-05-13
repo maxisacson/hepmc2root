@@ -50,9 +50,9 @@ int main(int argc, char** argv) {
 
     std::cout << "merging:\n";
     for (auto& f : inputs) {
-        std::cout << "  " << f;
+        std::cout << "  " << f << '\n';
     }
-    std::cout << "\n---> " << output << '\n';
+    std::cout << "---> " << output << '\n';
 
     auto* ascii_io = new HepMC::IO_GenEvent(output, std::ios::out);
     int ievent = 0;
