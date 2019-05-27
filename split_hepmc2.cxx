@@ -60,8 +60,7 @@ int main(int argc, char** argv) {
     int file_ievent   = 0;
     int ifile    = 0;
 
-    fn_output << fn_output_base << "." << ifile;
-    auto* ascii_io = new HepMC::IO_GenEvent(fn_output.str(), std::ios::out);
+    HepMC::IO_GenEvent* ascii_io = nullptr;
 
     std::cout << "Splitting input " << fn_input << " ...\n";
     while (is) {
@@ -70,23 +69,27 @@ int main(int argc, char** argv) {
         }
 
         if (events_per_file > 0 && file_ievent >= events_per_file) {
-            ++ifile;
             file_ievent = 0;
-            delete ascii_io;
-            std::stringstream().swap(fn_output);
-            fn_output << fn_output_base << "." << ifile;
-            ascii_io = new HepMC::IO_GenEvent(fn_output.str(), std::ios::out);
+            if (ascii_io != nullptr) {
+                delete ascii_io;
+                ascii_io = nullptr;
+            }
         }
 
         evt.read(is);
 
         if (evt.is_valid()) {
+            if (ascii_io == nullptr) {
+                std::stringstream().swap(fn_output);
+                fn_output << fn_output_base << "." << ifile++;
+                ascii_io = new HepMC::IO_GenEvent(fn_output.str(), std::ios::out);
+            }
             ascii_io->write_event(&evt);
             ++ievent;
             ++file_ievent;
         }
     }
-    std::cout << ievent << " events split over " << (ifile+1) << " files." << '\n';
+    std::cout << ievent << " events split over " << ifile << " files." << '\n';
 
     delete ascii_io;
 
